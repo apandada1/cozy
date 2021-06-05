@@ -1,3 +1,9 @@
+com.github.geigi.cozy (1.0.3) focal; urgency=low
+
+  * Update changelog for PPA
+
+ -- Archisman Panigrahi <apandada1@gmail.com>  Sat, 5 Jun 2021 09:29:13 +0530
+
 com.github.geigi.cozy (0.6.13) UNSTABLE; urgency=low
 
   * Sleep timer: Automatic system power control
