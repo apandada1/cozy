@@ -3,7 +3,7 @@ Section: gnome
 Priority: optional
 Maintainer: Julian Geywitz <github@geigi.de>
 Build-Depends: appstream,
-               debhelper (>= 9),
+               debhelper (>= 10),
                desktop-file-utils,
                libgranite-dev,
                libhandy-1-dev,
