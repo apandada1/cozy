@@ -1,4 +1,10 @@
-cozy (1.0.3) focal; urgency=low
+cozy (1.0.4) hirsute; urgency=low
+
+  * Update changelog for PPA
+
+ -- Archisman Panigrahi <apandada1@gmail.com>  Thu, 29 Jun 2021 01:29:26 +0530
+ 
+ cozy (1.0.3) focal; urgency=low
 
   * Update changelog for PPA
 
