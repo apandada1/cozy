@@ -45,6 +45,7 @@ class Player(EventSender):
         self._fadeout_thread: Optional[Thread] = None
 
         self._gst_player.init()
+        self.volume = self._app_settings.volume
 
         self._load_last_book()
 
@@ -358,9 +359,12 @@ class Player(EventSender):
         if self.position > self.loaded_chapter.end_position:
             self._next_chapter()
 
-        self.loaded_chapter.position = self.position
-        position_for_ui = self.position - self.loaded_chapter.start_position
-        self.emit_event_main_thread("position", position_for_ui)
+        try:
+            self.loaded_chapter.position = self.position
+            position_for_ui = self.position - self.loaded_chapter.start_position
+            self.emit_event_main_thread("position", position_for_ui)
+        except Exception as e:
+            log.warning("Could not emit position event: {}".format(e))
 
     def _fadeout_playback(self):
         duration = self._app_settings.sleep_timer_fadeout_duration * 20

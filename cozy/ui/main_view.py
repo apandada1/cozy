@@ -8,7 +8,7 @@ from cozy.control.db import books, close_db
 from cozy.control.offline_cache import OfflineCache
 from cozy.db.storage import Storage
 
-from gi.repository import Gtk, Gio, Gdk, GLib
+from gi.repository import Gtk, Gio, Gdk, GLib, Handy
 from threading import Thread
 
 from cozy.media.files import Files
@@ -21,7 +21,6 @@ from cozy.ui.settings import Settings
 from cozy.architecture.singleton import Singleton
 from cozy.model.settings import Settings as SettingsModel
 import cozy.report.reporter as report
-import cozy.tools as tools
 import cozy.control.filesystem_monitor as fs_monitor
 
 import os
@@ -36,11 +35,9 @@ class CozyUI(EventSender, metaclass=Singleton):
     CozyUI is the main ui class.
     """
     # Is currently an dialog open?
-    dialog_open = False
     is_initialized = False
     __inhibit_cookie = None
     fs_monitor = inject.attr(fs_monitor.FilesystemMonitor)
-    offline_cache = inject.attr(OfflineCache)
     settings = inject.attr(Settings)
     application_settings = inject.attr(ApplicationSettings)
     _importer: Importer = inject.attr(Importer)
@@ -57,15 +54,12 @@ class CozyUI(EventSender, metaclass=Singleton):
         self._library_view: LibraryView = None
 
     def activate(self, library_view: LibraryView):
-        self.first_play = True
-
         self.__init_actions()
         self.__init_components()
 
         self._library_view = library_view
 
         self.auto_import()
-        self.refresh_content()
         self.check_for_tracks()
 
         self.is_initialized = True
@@ -142,34 +136,12 @@ class CozyUI(EventSender, metaclass=Singleton):
         self.window.title = "Cozy"
 
         self.book_box = self.window_builder.get_object("book_box")
-        self.sort_stack = self.window_builder.get_object("sort_stack")
         self.main_stack: Gtk.Stack = self.window_builder.get_object("main_stack")
 
-        self.category_toolbar = self.window_builder.get_object(
-            "category_toolbar")
-
-        self.sort_stack_revealer = self.window_builder.get_object(
-            "sort_stack_revealer")
-        # This fixes a bug where otherwise expand is
-        # somehow set to true internally
-        # but is still showing false in the inspector
-        self.sort_stack_revealer.props.expand = True
-        self.sort_stack_revealer.props.expand = False
-
-        self.sort_stack_switcher = self.window_builder.get_object(
-            "sort_stack_switcher")
         self.no_media_file_chooser = self.window_builder.get_object(
             "no_media_file_chooser")
         self.no_media_file_chooser.connect(
             "file-set", self.__on_no_media_folder_changed)
-
-        self.auto_scan_switch = self.window_builder.get_object(
-            "auto_scan_switch")
-
-        # some visual stuff
-        self.category_toolbar_separator = self.window_builder.get_object("category_toolbar_separator")
-        if tools.is_elementary():
-            self.category_toolbar.set_visible(False)
 
         # get about dialog
         self.about_dialog = self.about_builder.get_object("about_dialog")
@@ -306,10 +278,8 @@ class CozyUI(EventSender, metaclass=Singleton):
         Switch the UI state back to playing.
         This enables all UI functionality for the user.
         """
-        if self.main_stack.props.visible_child_name != "book_overview" and self.main_stack.props.visible_child_name != "nothing_here" and self.main_stack.props.visible_child_name != "no_media":
+        if self.main_stack.props.visible_child_name != "book_overview" and self.main_stack.props.visible_child_name != "no_media":
             self.main_stack.props.visible_child_name = "main"
-        if self.main_stack.props.visible_child_name != "no_media" and self.main_stack.props.visible_child_name != "book_overview":
-            self.category_toolbar.set_visible(True)
         if self._player.loaded_book:
             self.block_ui_buttons(False, True)
         else:
@@ -332,7 +302,6 @@ class CozyUI(EventSender, metaclass=Singleton):
             self.no_media_file_chooser.set_current_folder(path)
             self.main_stack.props.visible_child_name = "no_media"
             self.block_ui_buttons(True)
-            self.category_toolbar.set_visible(False)
 
     def scan(self, _, __):
         thread = Thread(target=self._importer.scan, name="ScanMediaThread")
@@ -344,30 +313,6 @@ class CozyUI(EventSender, metaclass=Singleton):
 
     def back(self, action, parameter):
         self.emit_event("open_view", OpenView.LIBRARY)
-
-    def refresh_content(self):
-        """
-        Refresh all content.
-        """
-        # First clear the boxes
-        childs = self.book_box.get_children()
-        for element in childs:
-            self.book_box.remove(element)
-
-        self._library_view.populate_author()
-        self._library_view.populate_reader()
-        self._library_view.populate_book_box()
-
-        self.book_box.show_all()
-
-        return False
-
-    def display_failed_imports(self, files):
-        """
-        Displays a dialog with a list of files that could not be imported.
-        """
-        dialog = ImportFailedDialog(files)
-        dialog.show()
 
     def __on_hide_offline(self, action, value):
         """
@@ -399,19 +344,6 @@ class CozyUI(EventSender, metaclass=Singleton):
         self.scan(None, None)
         self.settings._init_storage()
         self.fs_monitor.init_offline_mode()
-
-    def track_changed(self):
-        self.block_ui_buttons(False, True)
-
-    def __window_resized(self, window):
-        """
-        Resize the progress scale to expand to the window size
-        for older gtk versions.
-        """
-        width, height = self.window.get_size()
-        value = width - 850
-        if value < 80:
-            value = 80
 
     def __about_close_clicked(self, widget):
         self.about_dialog.hide()

@@ -3,6 +3,8 @@ import os
 from enum import Enum, auto
 from typing import Optional
 
+from gi.repository import Gtk
+
 import cozy.ext.inject as inject
 from cozy.application_settings import ApplicationSettings
 from cozy.architecture.event_sender import EventSender
@@ -15,7 +17,7 @@ from cozy.model.book import Book
 from cozy.model.library import Library
 from cozy.open_view import OpenView
 from cozy.report import reporter
-from cozy.ui.book_element import BookElement
+from cozy.ui.widgets.book_element import BookElement
 from cozy.ui.import_failed_dialog import ImportFailedDialog
 from cozy.ui.settings import Settings
 
@@ -26,6 +28,12 @@ class LibraryViewMode(Enum):
     CURRENT = auto()
     AUTHOR = auto()
     READER = auto()
+
+
+class LibraryPage(Enum):
+    NONE = auto()
+    FILTER = auto()
+    BOOKS = auto()
 
 
 class LibraryViewModel(Observable, EventSender):
@@ -41,6 +49,7 @@ class LibraryViewModel(Observable, EventSender):
         super(Observable, self).__init__()
 
         self._library_view_mode: LibraryViewMode = LibraryViewMode.CURRENT
+        self._library_page: LibraryPage = LibraryPage.NONE
         self._selected_filter: str = _("All")
 
         self._connect()
@@ -65,6 +74,16 @@ class LibraryViewModel(Observable, EventSender):
     def library_view_mode(self, value):
         self._library_view_mode = value
         self._notify("library_view_mode")
+        self.emit_event(OpenView.LIBRARY, None)
+
+    @property
+    def library_page(self) -> LibraryPage:
+        return self._library_page
+
+    @library_page.setter
+    def library_page(self, value: LibraryPage):
+        self._library_page = value
+        self._notify("library_page")
 
     @property
     def selected_filter(self):
@@ -205,10 +224,14 @@ class LibraryViewModel(Observable, EventSender):
         elif event == "stop":
             self._notify("playing")
             self._notify("current_book_in_playback")
+        elif event == "position" or event == "book-finished":
+            self._notify("book-progress")
 
     def _on_settings_event(self, event: str, message):
         if event == "storage-removed":
             self._on_external_storage_removed(message)
+        elif event == "prefer-external-cover-changed":
+            self._notify("books")
 
     def _on_external_storage_removed(self, path: str):
         books = self.books.copy()
