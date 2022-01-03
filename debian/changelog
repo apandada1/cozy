@@ -1,4 +1,10 @@
-cozy (1.1.2) hirsute; urgency=low
+cozy (1.1.3) hirsute; urgency=low
+
+  * Update changelog for PPA
+
+ -- Archisman Panigrahi <apandada1@gmail.com>  Sat, 1 Jan 2022 13:12:53 +0530
+ 
+ cozy (1.1.2) hirsute; urgency=low
 
   * Update changelog for PPA
 
