@@ -1,3 +1,9 @@
+cozy (1.3) noble; urgency=low
+
+  * Update changelog for PPA
+
+ -- Archisman Panigrahi <apandada1@gmail.com>  Sat, 3 March 2022 8:24:32 -0500
+
 cozy (1.2.1) jammy; urgency=low
 
   * Update changelog for PPA
