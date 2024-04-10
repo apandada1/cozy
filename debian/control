@@ -3,6 +3,7 @@ Section: gnome
 Priority: optional
 Maintainer: Julian Geywitz <github@geigi.de>
 Build-Depends: appstream,
+               blueprint-compiler,
                debhelper (>= 10),
                desktop-file-utils,
                libadwaita-1-dev (>=1.4.0),
