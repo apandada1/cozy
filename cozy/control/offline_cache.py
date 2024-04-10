@@ -1,15 +1,12 @@
 import logging
-import uuid
 import os
-
-
-from cozy.architecture.event_sender import EventSender
-from cozy.control.application_directories import get_cache_dir
-import cozy.tools as tools
-import cozy.ui
+import uuid
 
 from gi.repository import Gio
 
+import cozy.tools as tools
+from cozy.architecture.event_sender import EventSender
+from cozy.control.application_directories import get_cache_dir
 from cozy.db.file import File
 from cozy.db.offline_cache import OfflineCache as OfflineCacheModel
 from cozy.db.track_to_file import TrackToFile
@@ -17,6 +14,7 @@ from cozy.ext import inject
 from cozy.model.book import Book
 from cozy.model.chapter import Chapter
 from cozy.report import reporter
+from cozy.view_model.settings_view_model import SettingsViewModel
 
 log = logging.getLogger("offline_cache")
 
@@ -53,7 +51,7 @@ class OfflineCache(EventSender):
 
         self._start_processing()
 
-        inject.instance(cozy.ui.settings.Settings).add_listener(self.__on_settings_changed)
+        inject.instance(SettingsViewModel).add_listener(self.__on_settings_changed)
 
     def add(self, book: Book):
         """
@@ -103,11 +101,9 @@ class OfflineCache(EventSender):
 
         self._start_processing()
 
-    def remove_all_for_storage(self, storage_path):
-        """
-        """
+    def remove_all_for_storage(self, storage):
         for element in OfflineCacheModel.select().join(File).where(
-                storage_path in OfflineCacheModel.original_file.path):
+                storage.path in OfflineCacheModel.original_file.path):
             file_path = os.path.join(self.cache_dir, element.cached_file)
             if file_path == self.cache_dir:
                 continue
@@ -116,14 +112,11 @@ class OfflineCache(EventSender):
             if file.query_exists():
                 file.delete()
 
-            if element.track.book.offline == True:
-                element.track.book.update(offline=False, downloaded=False).execute()
-
-        OfflineCacheModel.delete().where(storage_path in OfflineCacheModel.original_file.path).execute()
+        OfflineCacheModel.delete().where(storage.path in OfflineCacheModel.original_file.path).execute()
 
     def get_cached_path(self, chapter: Chapter):
         query = OfflineCacheModel.select().where(OfflineCacheModel.original_file == chapter.file_id,
-                                                 OfflineCacheModel.copied == True)
+                                                 OfflineCacheModel.copied)
         if query.count() > 0:
             return os.path.join(self.cache_dir, query.get().cached_file)
         else:
@@ -167,7 +160,7 @@ class OfflineCache(EventSender):
         self.thread.start()
 
     def _process_queue(self):
-        log.info("Started processing queue")
+        log.info("Started processing offline cache queue")
         self.filecopy_cancel = Gio.Cancellable()
 
         self._fill_queue_from_db()
@@ -178,11 +171,12 @@ class OfflineCache(EventSender):
             self.emit_event_main_thread("start")
 
         while len(self.queue) > 0:
-            log.info("Processing item")
             self.current_batch_count += 1
             item = self.queue[0]
             if self.thread.stopped():
                 break
+
+            log.info("Processing item: %r", item)
 
             query = OfflineCacheModel.select().where(OfflineCacheModel.id == item.id)
             if not query.exists():
@@ -196,7 +190,7 @@ class OfflineCache(EventSender):
                 self.current_book_processing = book.id
 
             if not new_item.copied and os.path.exists(new_item.original_file.path):
-                log.info("Copying item")
+                log.info("Copying item: %r", new_item)
                 self.emit_event_main_thread("message",
                                             _("Copying") + " " + tools.shorten_string(book.name, 30))
                 self.current = new_item
@@ -212,8 +206,7 @@ class OfflineCache(EventSender):
                         self.thread.stop()
                         break
                     reporter.exception("offline_cache", e)
-                    log.error("Could not copy file to offline cache: " + new_item.original_file.path)
-                    log.error(e)
+                    log.error("Could not copy file %r to offline cache: %s", new_item.original_file.path, e)
                     self.queue.remove(item)
                     continue
 
@@ -249,11 +242,7 @@ class OfflineCache(EventSender):
         offline_files = OfflineCacheModel.select().where(OfflineCacheModel.original_file << file_ids)
         offline_file_ids = [file.original_file.id for file in offline_files]
 
-        for chapter in book.chapters:
-            if chapter.file_id not in offline_file_ids:
-                return False
-
-        return True
+        return all(chapter.file_id in offline_file_ids for chapter in book.chapters)
 
     def _is_processing(self):
         """
@@ -264,7 +253,7 @@ class OfflineCache(EventSender):
             return False
 
     def _fill_queue_from_db(self):
-        for item in OfflineCacheModel.select().where(OfflineCacheModel.copied == False):
+        for item in OfflineCacheModel.select().where(not OfflineCacheModel.copied):
             if not any(item.id == queued.id for queued in self.queue):
                 self.queue.append(item)
                 self.total_batch_count += 1
@@ -284,8 +273,5 @@ class OfflineCache(EventSender):
         self.emit_event_main_thread("progress", min(progress, 1))
 
     def __on_settings_changed(self, event, message):
-        """
-        This method reacts to storage settings changes.
-        """
         if event == "storage-removed" or event == "external-storage-removed":
             self.remove_all_for_storage(message)

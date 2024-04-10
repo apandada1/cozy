@@ -4,19 +4,19 @@ import os
 import time
 from enum import Enum, auto
 from multiprocessing.pool import Pool as Pool
-from typing import List, Set
-from urllib.parse import urlparse, unquote
+from urllib.parse import unquote, urlparse
 
 from cozy.architecture.event_sender import EventSender
 from cozy.architecture.profiler import timing
 from cozy.control.filesystem_monitor import FilesystemMonitor, StorageNotFound
 from cozy.ext import inject
-from cozy.media.media_detector import MediaDetector, NotAnAudioFile, AudioFileCouldNotBeDiscovered
+from cozy.media.media_detector import AudioFileCouldNotBeDiscovered, MediaDetector, NotAnAudioFile
 from cozy.media.media_file import MediaFile
 from cozy.model.database_importer import DatabaseImporter
 from cozy.model.library import Library
 from cozy.model.settings import Settings
 from cozy.report import reporter
+from cozy.ui.toaster import ToastNotifier
 
 log = logging.getLogger("importer")
 
@@ -37,7 +37,7 @@ def import_file(path: str):
     try:
         media_detector = MediaDetector(path)
         media_data = media_detector.get_media_data()
-    except NotAnAudioFile as e:
+    except NotAnAudioFile:
         return None
     except AudioFileCouldNotBeDiscovered as e:
         return unquote(urlparse(str(e)).path)
@@ -54,6 +54,7 @@ class Importer(EventSender):
     _settings = inject.attr(Settings)
     _library = inject.attr(Library)
     _database_importer = inject.attr(DatabaseImporter)
+    _toast: ToastNotifier = inject.attr(ToastNotifier)
 
     def __init__(self):
         super().__init__()
@@ -83,7 +84,7 @@ class Importer(EventSender):
             logging.info(undetected_files)
             self.emit_event_main_thread("import-failed", undetected_files)
 
-    def _execute_import(self, files_to_scan: List[str]) -> (Set[str], Set[str]):
+    def _execute_import(self, files_to_scan: list[str]) -> tuple[set[str], set[str]]:
         new_or_changed_files = set()
         undetected_files = set()
 
@@ -104,12 +105,18 @@ class Importer(EventSender):
 
             undetected_files.update({file for file in import_result if isinstance(file, str)})
             media_files = {file for file in import_result if isinstance(file, MediaFile)}
-            new_or_changed_files.update((file.path for file in media_files))
+            new_or_changed_files.update(file.path for file in media_files)
 
             self._progress += CHUNK_SIZE
 
             if len(media_files) != 0:
-                self._database_importer.insert_many(media_files)
+                try:
+                    self._database_importer.insert_many(media_files)
+                except Exception as e:
+                    log.exception("Error while inserting new tracks to the database")
+                    reporter.exception("importer", e)
+                    self._toast.show("{}: {}".format(_("Error while importing new files"), str(e.__class__)))
+
             if self._progress >= self._files_count:
                 break
         pool.close()
@@ -133,14 +140,14 @@ class Importer(EventSender):
             reporter.exception("importer", e, "_count_files_to_scan raised a stop iteration.")
             return 1
 
-    def _get_files_to_scan(self) -> List[str]:
+    def _get_files_to_scan(self) -> list[str]:
         paths_to_scan = self._get_configured_storage_paths()
         files_in_media_folders = self._walk_paths_to_scan(paths_to_scan)
         files_to_scan = self._filter_unchanged_files(files_in_media_folders)
 
         return files_to_scan
 
-    def _get_configured_storage_paths(self) -> List[str]:
+    def _get_configured_storage_paths(self) -> list[str]:
         """From all storage path configured by the user,
         we only want to scan those paths that are currently online and exist."""
         paths = [storage.path
@@ -157,15 +164,15 @@ class Importer(EventSender):
 
         return [path for path in paths if os.path.exists(path)]
 
-    def _walk_paths_to_scan(self, paths: List[str]) -> List[str]:
+    def _walk_paths_to_scan(self, paths: list[str]) -> list[str]:
         """Get all files recursive inside a directory. Returns absolute paths."""
         for path in paths:
-            for directory, subdirectories, files in os.walk(path):
+            for directory, _, files in os.walk(path):
                 for file in files:
                     filepath = os.path.join(directory, file)
                     yield filepath
 
-    def _filter_unchanged_files(self, files: List[str]) -> List[str]:
+    def _filter_unchanged_files(self, files: list[str]) -> list[str]:
         """Filter all files that are already imported and that have not changed from a list of paths."""
         imported_files = self._library.files
 
@@ -177,7 +184,8 @@ class Importer(EventSender):
                                    in self._library.chapters
                                    if chapter.file == file)
                 except StopIteration as e:
-                    reporter.exception("importer", e, "_filter_unchanged_files raised a stop iteration.")
+                    log.warning("_filter_unchanged_files raised a stop iteration.")
+                    log.debug(e)
                     yield file
                     continue
 
@@ -187,12 +195,9 @@ class Importer(EventSender):
                         yield file
                 except Exception as e:
                     log.debug(e)
-                    log.info("Could not get modified timestamp for file {}".format(file))
+                    log.info("Could not get modified timestamp for file %s", file)
                     continue
 
                 continue
 
             yield file
-
-    def _get_file_count_in_dir(self, dir):
-        len([name for name in os.listdir(dir) if os.path.isfile(name)])

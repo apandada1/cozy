@@ -32,12 +32,15 @@ Head over to [Matrix](https://matrix.to/#/#cozy:gnome.org?via=matrix.org&via=gno
 |--------|:---------:|
 | Flatpak | <a href='https://flathub.org/apps/details/com.github.geigi.cozy'><img width='150' alt='Download on Flathub' src='https://flathub.org/assets/badges/flathub-badge-en.png'/></a> |
 | openSUSE | <center><a href="https://software.opensuse.org/package/cozy">cozy</a> |
+| Fedora | <center><a href="https://src.fedoraproject.org/rpms/cozy">cozy</a> |
 | Arch Linux (AUR) | <a href="https://aur.archlinux.org/packages/cozy-audiobooks/">cozy-audiobooks</a></center> |
 | VoidLinux | <a href="https://github.com/void-linux/void-packages/tree/master/srcpkgs/cozy">cozy</a> |
 | Solus | <a href="https://dev.getsol.us/source/cozy/">cozy</a> |
 | MX Linux | <center><a href="https://forum.mxlinux.org/viewtopic.php?p=621071#p621071">Cozy</a> |
 | elementaryOS | Currently out of date. Please use Flatpak for now. |
 | Ubuntu (PPA) | <center><a href="https://launchpad.net/~cozy-team/+archive/ubuntu/cozy">cozy</a> |
+| OpenBSD | <center><a href="https://cvsweb.openbsd.org/ports/audio/cozy/">cozy</a> |
+| Nix | <center><a href="https://github.com/NixOS/nixpkgs/blob/master/pkgs/applications/audio/cozy/default.nix">cozy</a> |
 
 
 ## elementaryOS
@@ -67,16 +70,13 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed instructions and developing Co
 ## Requirements
 - `python3`
 - `meson >= 0.40.0` as build system
-- `gtk3 >= 3.22`
-- `libhandy >= 1.0.0`
-- `granite >= 5.3.0`
-- `libdazzle >= 3.34.0`
+- `gtk4 >= 4.10`
+- `libadwaita >= 1.5.0`
 - `peewee >= 3.9.6` as object relation mapper
 - `mutagen` for meta tag management
 - `distro`
 - `requests`
 - `pytz`
-- `packaging`
 - `gi-cairo`
 - `gst-1.0`
 - `file`
@@ -140,7 +140,9 @@ flatpak --user override --filesystem=/media com.github.geigi.cozy
 
 ## A big thanks
 To the contributors on GitHub:
+- A6GibKm
 - alyssais
+- apandada1
 - AsavarTzeth
 - Fatih20
 - NathanBnm
@@ -151,6 +153,7 @@ To the contributors on GitHub:
 - grenade
 - jimmac
 - jnbr
+- jubalh
 - kaphula
 - leuc
 - magnickolas
@@ -159,6 +162,8 @@ To the contributors on GitHub:
 - oleg-krv
 - paper42
 - phpwutz
+- rapenne-s
+- rdbende
 - thibaultamartin
 - umeboshi2
 - worldofpeace
@@ -176,9 +181,12 @@ The translators:
 - Floflr
 - Foxyriot
 - HansCz
+- IngrownMink4
 - IvoIliev
 - Jagadeeshvarma
+- Kwentin
 - MageJohn
+- NHiX
 - Nimmerliefde
 - Oi_Suomi_On
 - Okton
@@ -194,7 +202,6 @@ The translators:
 - aKodi
 - abcmen
 - abuyop
-- akodi
 - albanobattistella
 - amadeussss
 - andreapillai
@@ -204,9 +211,10 @@ The translators:
 - baschdl78
 - camellan
 - cavinsmith
+- cho2
 - chris109b
 - cjfloss
-- cleitonjfloss
+- ckaotik
 - corentinbettiol
 - dtgoitia
 - dzerus3
@@ -215,6 +223,7 @@ The translators:
 - eson
 - fishcake13
 - fountain
+- fran.dieguez
 - georgelemental
 - giuscasula
 - goran.p1123581321
@@ -226,11 +235,13 @@ The translators:
 - karaagac
 - kevinmueller
 - leondorus
-- libreajans
+- Sabri Unal
 - linuxmasterclub
 - magnickolas
+- makaleks
 - mannycalavera42
 - mardojai
+- markluethje
 - milotype
 - mvainola
 - n1k7as
@@ -240,6 +251,8 @@ The translators:
 - oleg_krv
 - ooverloord
 - oscfdezdz
+- pavelz
+- rafaelff1
 - ragouel
 - saarikko
 - sobeitnow0
@@ -248,21 +261,24 @@ The translators:
 - tclokie
 - test21
 - thibaultmartin
+- translatornator
 - tsitokhtsev
 - twardowskidev
 - txelu
+- useruseruser1233211
 - vanhoxx
 - vlabo
 - xfgusta
 - yalexaner
+- bittin
 
 
 To nedrichards for the Flatpak.
 
 ## Help me translate cozy!
-Cozy is on <a href="https://www.transifex.com/geigi/cozy/"> Transifex</a>, where anyone can contribute and translate. Can't find your language in the list? Let me know!
+Cozy is on <a href="https://www.transifex.com/geigi/cozy/">Transifex</a>, where anyone can contribute and translate. Can't find your language in the list? Let me know!
 
-If you like this project, consider supporting me on <a href="https://www.patreon.com/bePatron?u=8147127"> Patreon</a> :)
+If you like this project, consider supporting me on <a href="https://www.patreon.com/geigi">Patreon</a> :)
 
 ----
 [![Maintainability](https://api.codeclimate.com/v1/badges/fde8cbdff23033adaca2/maintainability)](https://codeclimate.com/github/geigi/cozy/maintainability)

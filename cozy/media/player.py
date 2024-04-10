@@ -11,25 +11,27 @@ from cozy.architecture.event_sender import EventSender
 from cozy.control.offline_cache import OfflineCache
 from cozy.ext import inject
 from cozy.media.gst_player import GstPlayer, GstPlayerState
+from cozy.media.importer import Importer, ScanStatus
 from cozy.model.book import Book
 from cozy.model.chapter import Chapter
 from cozy.model.library import Library
 from cozy.report import reporter
 from cozy.tools import IntervalTimer
 from cozy.ui.file_not_found_dialog import FileNotFoundDialog
-from cozy.ui.info_banner import InfoBanner
+from cozy.ui.toaster import ToastNotifier
 
 log = logging.getLogger("mediaplayer")
 
+US_TO_SEC = 10 ** 6
 NS_TO_SEC = 10 ** 9
-REWIND_SECONDS = 30
 
 
 class Player(EventSender):
     _library: Library = inject.attr(Library)
     _app_settings: ApplicationSettings = inject.attr(ApplicationSettings)
     _offline_cache: OfflineCache = inject.attr(OfflineCache)
-    _info_bar: InfoBanner = inject.attr(InfoBanner)
+    _toast: ToastNotifier = inject.attr(ToastNotifier)
+    _importer: Importer = inject.attr(Importer)
 
     _gst_player: GstPlayer = inject.attr(GstPlayer)
 
@@ -39,6 +41,7 @@ class Player(EventSender):
         self._book: Optional[Book] = None
         self._play_next_chapter: bool = True
 
+        self._importer.add_listener(self._on_importer_event)
         self._gst_player.add_listener(self._on_gst_player_event)
 
         self.play_status_updater: IntervalTimer = IntervalTimer(1, self._emit_tick)
@@ -77,7 +80,9 @@ class Player(EventSender):
 
     @position.setter
     def position(self, new_value: int):
-        self._gst_player.position = self.loaded_chapter.start_position + (new_value * NS_TO_SEC)
+        # FIXME: setter expects seconds, but getter returns nanoseconds
+        if self.loaded_chapter is not None:
+            self._gst_player.position = max(self.loaded_chapter.start_position + (new_value * NS_TO_SEC), 0)
 
     @property
     def volume(self) -> float:
@@ -169,8 +174,7 @@ class Player(EventSender):
 
     def destroy(self):
         self._gst_player.dispose()
-
-        self._stop_tick_thread()
+        self._stop_playback()
 
         if self._fadeout_thread:
             self._fadeout_thread.stop()
@@ -282,6 +286,7 @@ class Player(EventSender):
         if not self._book:
             log.error("Cannot play next chapter because no book reference is stored.")
             reporter.error("player", "Cannot play next chapter because no book reference is stored.")
+            return
 
         index_current_chapter = self._book.chapters.index(self._book.current_chapter)
 
@@ -294,6 +299,16 @@ class Player(EventSender):
             chapter = self._book.chapters[index_current_chapter + 1]
             chapter.position = chapter.start_position
             self.play_pause_chapter(self._book, chapter)
+
+    def _on_importer_event(self, event: str, message):
+        if event == "scan" and message == ScanStatus.SUCCESS:
+            log.info("Reloading current book")
+            last_book = self._library.last_played_book
+            if last_book:
+                self._continue_book(last_book)
+                # we need to tell everybody the new book object
+                # it represents the same book but after a scan the old objects do get destroyed
+                self.emit_event_main_thread("chapter-changed", self._book)
 
     def _on_gst_player_event(self, event: str, message):
         if event == "file-finished":
@@ -314,14 +329,14 @@ class Player(EventSender):
 
     def _handle_gst_error(self, error: GLib.Error):
         if error.code != Gst.ResourceError.BUSY:
-            self._info_bar.show(error.message)
+            self._toast.show(error.message)
 
         if error.code == Gst.ResourceError.OPEN_READ or Gst.ResourceError.READ:
             self._stop_playback()
 
     def _handle_file_not_found(self):
         if self.loaded_chapter:
-            FileNotFoundDialog(self.loaded_chapter).show()
+            FileNotFoundDialog(self.loaded_chapter).present()
             self._stop_playback()
         else:
             log.warning("No chapter loaded, cannot display file not found dialog.")
@@ -364,12 +379,12 @@ class Player(EventSender):
             position_for_ui = self.position - self.loaded_chapter.start_position
             self.emit_event_main_thread("position", position_for_ui)
         except Exception as e:
-            log.warning("Could not emit position event: {}".format(e))
+            log.warning("Could not emit position event: %s", e)
 
     def _fadeout_playback(self):
         duration = self._app_settings.sleep_timer_fadeout_duration * 20
         current_vol = self._gst_player.volume
-        for i in range(0, duration):
+        for i in range(duration):
             volume = max(current_vol - (i / duration), 0)
             self._gst_player.position = volume
             time.sleep(0.05)

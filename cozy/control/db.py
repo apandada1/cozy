@@ -1,10 +1,10 @@
 import logging
 import time
 
-
 from cozy.control.db_updater import update_db
 from cozy.db.artwork_cache import ArtworkCache
 from cozy.db.book import Book
+from cozy.db.collation import collate_natural
 from cozy.db.file import File
 from cozy.db.model_base import get_sqlite_database
 from cozy.db.offline_cache import OfflineCache
@@ -24,7 +24,7 @@ def init_db():
     _connect_db(_db)
 
     sqlite_version = ".".join([str(num) for num in _db.server_version])
-    log.info("SQLite version: {}".format(sqlite_version))
+    log.info("SQLite version: %s", sqlite_version)
 
     if Settings.table_exists():
         update_db()
@@ -43,6 +43,8 @@ def init_db():
              bind_refs=False,
              bind_backrefs=False)
 
+    _db.register_collation(collate_natural)
+
     if (Settings.select().count() == 0):
         Settings.create(path="", last_played_book=None)
 
@@ -56,8 +58,7 @@ def _connect_db(db):
         db.connect(reuse_if_open=True)
     except Exception as e:
         reporter.exception("db", e)
-        log.error("Could not connect to database. ")
-        log.error(e)
+        log.error("Could not connect to database: %s", e)
 
 
 def books():
@@ -89,10 +90,7 @@ def get_track_for_playback(book):
     query = Track.select().where(Track.id == book.position)
     if book.position < 1:
         track_items = get_tracks(book)
-        if len(track_items) > 0:
-            track = get_tracks(book)[0]
-        else:
-            track = None
+        track = get_tracks(book)[0] if len(track_items) > 0 else None
     elif query.exists():
         track = query.get()
     else:

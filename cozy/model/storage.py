@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 from peewee import SqliteDatabase
 
@@ -16,6 +16,11 @@ class Storage:
 
         self._get_db_object()
 
+    @staticmethod
+    def new(db: SqliteDatabase, path: str):
+        db_obj = StorageModel.create(path=path)
+        return Storage(db, db_obj.id)
+
     def _get_db_object(self):
         self._db_object: StorageModel = StorageModel.get(self.id)
 
@@ -28,11 +33,11 @@ class Storage:
         return self._db_object.path
 
     @path.setter
-    def path(self, new_path: str):
-        if not os.path.isabs(new_path):
+    def path(self, path: str):
+        if not Path(path).is_absolute():
             raise InvalidPath
 
-        self._db_object.path = new_path
+        self._db_object.path = path
         self._db_object.save(only=self._db_object.dirty_fields)
 
     @property
@@ -61,3 +66,6 @@ class Storage:
     def external(self, new_external: bool):
         self._db_object.external = new_external
         self._db_object.save(only=self._db_object.dirty_fields)
+
+    def delete(self):
+        self._db_object.delete_instance(recursive=True, delete_nullable=False)

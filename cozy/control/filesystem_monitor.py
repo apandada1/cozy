@@ -1,9 +1,8 @@
 import logging
-from typing import List
 
-import cozy.ext.inject as inject
 from gi.repository import Gio
 
+import cozy.ext.inject as inject
 from cozy.architecture.event_sender import EventSender
 from cozy.model.book import Book
 from cozy.model.settings import Settings
@@ -27,7 +26,7 @@ class ExternalStorage:
 
 
 class FilesystemMonitor(EventSender):
-    external_storage: List[ExternalStorage] = []
+    external_storage: list[ExternalStorage] = []
     _settings: Settings = inject.attr(Settings)
 
     def __init__(self):
@@ -38,19 +37,19 @@ class FilesystemMonitor(EventSender):
 
         self.init_offline_mode()
 
-        from cozy.ui.settings import Settings as UISettings
-        self._ui_settings = inject.instance(UISettings)
-        self._ui_settings.add_listener(self.__on_settings_changed)
+        from cozy.view_model.settings_view_model import SettingsViewModel
+        self._settings_view_model = inject.instance(SettingsViewModel)
+        self._settings_view_model.add_listener(self.__on_settings_changed)
 
     def init_offline_mode(self):
-        external_storage = []
         mounts = self.volume_monitor.get_mounts()
         # go through all audiobook locations and test if they can be found in the mounts list
 
         for storage in self._settings.external_storage_locations:
-            online = False
-            if any(mount.get_root().get_path() in storage.path for mount in mounts):
-                online = True
+            online = any(
+                mount.get_root().get_path() and mount.get_root().get_path() in storage.path
+                for mount in mounts
+            )
             self.external_storage.append(ExternalStorage(storage=storage, online=online))
 
     def close(self):
@@ -58,19 +57,17 @@ class FilesystemMonitor(EventSender):
         Free all references.
         """
         # self.volume_monitor.unref()
-        pass
 
     def get_book_online(self, book: Book):
-        result = next(
-            (storage.online for storage in self.external_storage if storage.storage.path in book.chapters[0].file),
-            True)
-        return result
+        try:
+            return next(
+                (storage.online for storage in self.external_storage if storage.storage.path in book.chapters[0].file),
+                True)
+        except IndexError:
+            return True
 
     def is_track_online(self, track):
-        """
-        """
-        result = next((storage.online for storage in self.external_storage if storage.storage.path in track.file), True)
-        return (result)
+        return next((storage.online for storage in self.external_storage if storage.storage.path in track.file), True)
 
     def get_offline_storages(self):
         return [i.storage.path for i in self.external_storage if not i.online]
@@ -84,7 +81,7 @@ class FilesystemMonitor(EventSender):
         return storage.online
 
     def is_external(self, directory: str) -> bool:
-        mounts: List[Gio.Mount] = self.volume_monitor.get_mounts()
+        mounts: list[Gio.Mount] = self.volume_monitor.get_mounts()
 
         for mount in mounts:
             root = mount.get_root()
@@ -100,8 +97,10 @@ class FilesystemMonitor(EventSender):
                 return False
 
             if path in directory and mount.can_unmount():
+                log.info("Storage location %s is external", directory)
                 return True
 
+        log.info("Storage location %s is not external", directory)
         return False
 
     def __on_mount_added(self, monitor, mount):
@@ -115,11 +114,11 @@ class FilesystemMonitor(EventSender):
             log.warning("Mount added but no mount_path is present. Skipping...")
             return
 
-        log.debug("Volume mounted: " + mount_path)
+        log.debug("Volume mounted: %s", mount_path)
 
         storage = next((s for s in self.external_storage if mount_path in s.storage.path), None)
         if storage:
-            log.info("Storage online: " + mount_path)
+            log.info("Storage online: %s", mount_path)
             storage.online = True
             self.emit_event("storage-online", storage.storage.path)
 
@@ -134,11 +133,11 @@ class FilesystemMonitor(EventSender):
             log.warning("Mount removed but no mount_path is present. Skipping...")
             return
 
-        log.debug("Volume unmounted: " + mount_path)
+        log.debug("Volume unmounted: %s", mount_path)
 
         storage = next((s for s in self.external_storage if mount_path in s.storage.path), None)
         if storage:
-            log.info("Storage offline: " + mount_path)
+            log.info("Storage offline: %s", mount_path)
             storage.online = False
             self.emit_event("storage-offline", storage.storage.path)
 
@@ -152,4 +151,4 @@ class FilesystemMonitor(EventSender):
                 event == "storage-added" and message != ""):
             self.init_offline_mode()
         elif event == "storage-removed" or event == "external-storage-removed":
-            self.external_storage = [item for item in self.external_storage if item.storage.path not in message]
+            self.external_storage = [item for item in self.external_storage if item.storage.path not in message.path]
